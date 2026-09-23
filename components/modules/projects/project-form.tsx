@@ -28,11 +28,11 @@ export function ProjectForm({
 
   const [title, setTitle] = useState('')
   const [clientId, setClientId] = useState('')
-  const [type, setType] = useState<ProjectType>('INTERIOR')
+  // No default — the type has to be chosen deliberately.
+  const [type, setType] = useState<ProjectType | ''>('')
   const [projectValue, setProjectValue] = useState('')
   const [startDate, setStartDate] = useState('')
   const [deadline, setDeadline] = useState('')
-  const [seedTasks, setSeedTasks] = useState(false)
 
   useEffect(() => {
     first.current?.focus()
@@ -49,6 +49,7 @@ export function ProjectForm({
 
     if (title.trim().length < 2) return setError('Give the project a title.')
     if (!clientId) return setError('Choose a client.')
+    if (!type) return setError('Choose the project type.')
 
     startTransition(async () => {
       const result = await createProject({
@@ -58,7 +59,6 @@ export function ProjectForm({
         projectValue: projectValue ? Number(projectValue) : undefined,
         startDate: startDate ? new Date(startDate) : undefined,
         deadline: deadline ? new Date(deadline) : undefined,
-        seedTasks,
       })
 
       if (!result.success) return setError(result.error)
@@ -121,12 +121,15 @@ export function ProjectForm({
               </select>
             </div>
             <div>
-              <label htmlFor="ptype" className={label}>Type</label>
+              <label htmlFor="ptype" className={label}>
+                Type <span className="text-[#C1502E]">*</span>
+              </label>
               <select
                 id="ptype" value={type}
                 onChange={(e) => setType(e.target.value as ProjectType)}
                 className={field}
               >
+                <option value="">Select a type…</option>
                 {PROJECT_TYPES.map((t) => (
                   <option key={t} value={t}>{TYPE_LABEL[t]}</option>
                 ))}
@@ -155,24 +158,6 @@ export function ProjectForm({
               <input id="pdead" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className={field} />
             </div>
           </div>
-
-          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#E8E5DC] bg-[#FAF9F6] p-3">
-            <input
-              type="checkbox"
-              checked={seedTasks}
-              onChange={(e) => setSeedTasks(e.target.checked)}
-              className="mt-0.5 h-4 w-4 shrink-0 accent-[#C1502E]"
-            />
-            <span>
-              <span className="block text-sm font-medium text-[#26251F]">
-                Start from the {TYPE_LABEL[type]} checklist
-              </span>
-              <span className="block text-xs text-[#8A8778]">
-                Adds the standard {TYPE_LABEL[type]} tasks. Leave off to start with an
-                empty task list.
-              </span>
-            </span>
-          </label>
 
           {error && (
             <p role="alert" className="rounded-lg bg-[#FBEAE6] px-3.5 py-2.5 text-sm text-[#C1443B]">

@@ -39,6 +39,6 @@ export const updateProjectStatusSchema = z.object({
   status: projectStatusEnum,
 })
 
-export type CreateProjectInput = z.infer<typeof createProjectSchema>
+export type CreateProjectInput = z.input<typeof createProjectSchema>
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>
 export type UpdateProjectStatusInput = z.infer<typeof updateProjectStatusSchema>

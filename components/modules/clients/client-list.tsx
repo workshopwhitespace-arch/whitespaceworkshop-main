@@ -137,11 +137,9 @@ export function ClientList({
                       href={`/dashboard/clients/${c.id}`}
                       className="font-medium text-[#26251F] transition group-hover:text-[#C1502E]"
                     >
-                      {c.name}
+                      {c.companyName || c.name}
                     </Link>
-                    {c.companyName && (
-                      <p className="text-xs text-[#8A8778]">{c.companyName}</p>
-                    )}
+                    {c.companyName && <p className="text-xs text-[#8A8778]">{c.name}</p>}
                   </td>
                   <td className="px-4 py-3">
                     {c.email && (

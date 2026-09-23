@@ -1,4 +1,5 @@
 import { db } from '@/lib/db'
+import { notifyUsers } from '@/lib/notify'
 
 /**
  * Tells every active Super Admin about todos still unfinished at 19:00 IST on
@@ -35,7 +36,7 @@ export async function notifyOverdueTodos() {
 
   const overdue = await db.todo.findMany({
     where: { isDone: false, overdueNotifiedAt: null, deadline: { lte: cutoff }, deletedAt: null },
-    include: { user: { select: { name: true } } },
+    include: { user: { select: { id: true, name: true } } },
     orderBy: { deadline: 'asc' },
   })
   if (overdue.length === 0) return { notified: 0 }
@@ -69,6 +70,15 @@ export async function notifyOverdueTodos() {
         relatedEntityId: todo.id,
       })),
     })
+    // The person whose todo it is hears about it as well.
+    await notifyUsers(
+      [todo.userId],
+      dueToday
+        ? `Your todo “${todo.name}” is due today and still isn’t done.`
+        : `Your todo “${todo.name}” was due ${deadline} and still isn’t done.`,
+      { type: 'Todo', id: todo.id }
+    )
+
     reported.push({ name: todo.name, owner: todo.user.name, deadline })
   }
 

@@ -3,6 +3,7 @@
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 import { signupSchema, type SignupInput } from '@/lib/validations/auth'
+import { notifyUsers, superAdminIds } from '@/lib/notify'
 
 /**
  * Public sign-up — the one action with no requireRole in front of it.
@@ -27,7 +28,7 @@ export async function signup(input: SignupInput) {
     }
   }
 
-  await db.user.create({
+  const user = await db.user.create({
     data: {
       name,
       email,
@@ -36,6 +37,12 @@ export async function signup(input: SignupInput) {
       status: 'pending',
     },
   })
+
+  await notifyUsers(
+    await superAdminIds(),
+    `${name} signed up (${email}) and is waiting for approval on Team & Roles.`,
+    { type: 'User', id: user.id }
+  )
 
   return { success: true as const }
 }

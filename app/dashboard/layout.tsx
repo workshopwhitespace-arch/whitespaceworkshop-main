@@ -6,6 +6,7 @@ import { listMyNotifications } from '@/lib/actions/notifications'
 import { notifyOverdueTodosThrottled } from '@/lib/overdue-todos'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Topbar } from '@/components/layout/topbar'
+import { AutoRefresh } from '@/components/layout/auto-refresh'
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const session = await auth()
@@ -22,6 +23,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <div className="flex h-screen bg-[#FAF9F6]">
+      {/* Keeps notifications and lists current without a manual reload. */}
+      <AutoRefresh />
       <Sidebar role={session.user.role} userName={session.user.name ?? 'User'} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar

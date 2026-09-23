@@ -87,18 +87,15 @@ export async function updateClient(input: UpdateClientInput) {
 }
 
 /**
- * All clients for the Clients list screen. Employees only see clients they
- * have an assigned project under.
+ * Every client, for everyone. The studio's client book is shared — a client
+ * added by one person has to be visible to the rest — so this isn't scoped
+ * by role. Project values inside stay Super Admin only.
  */
 export async function listClients() {
-  const session = await requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE'])
-  const isEmployee = session.user.role === 'EMPLOYEE'
+  await requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE'])
 
   return db.client.findMany({
-    where: {
-      deletedAt: null,
-      ...(isEmployee ? employeeClientScope(session.user.id) : {}),
-    },
+    where: { deletedAt: null },
     include: {
       _count: { select: { projects: true } },
     },
@@ -120,6 +117,8 @@ export async function getClientDetail(clientId: string) {
   const client = await db.client.findFirst({ where: { id: clientId, deletedAt: null } })
   if (!client) return null
 
+  // The client itself is shared; the projects listed under it are still
+  // only the ones a Team member is on.
   const projects = await db.project.findMany({
     where: {
       clientId,
@@ -127,10 +126,6 @@ export async function getClientDetail(clientId: string) {
     },
     orderBy: { createdAt: 'desc' },
   })
-
-  if (isEmployee && projects.length === 0) {
-    return null
-  }
 
   return {
     ...client,

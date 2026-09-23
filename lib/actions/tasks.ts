@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
 import { TASK_TEMPLATES } from '@/lib/task-templates'
 import { logActivity } from '@/lib/actions/activity'
+import { notifyUsers } from '@/lib/notify'
 import {
   createTaskSchema,
   updateTaskSchema,
@@ -23,6 +24,14 @@ import {
  * stale refresh. That's an ordinary race, not a crash, so it comes back as
  * a normal failed result the UI can show inline.
  */
+/** Plain-English stage names for notification text. */
+const STAGE_LABEL: Record<string, string> = {
+  TODO: 'To do',
+  IN_PROGRESS: 'In progress',
+  REVIEW: 'Review',
+  DONE: 'Done',
+}
+
 function missingRecord(error: unknown) {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025'
@@ -30,7 +39,7 @@ function missingRecord(error: unknown) {
 }
 
 export async function createTask(input: CreateTaskInput) {
-  await requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE'])
+  const session = await requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE'])
 
   const parsed = createTaskSchema.safeParse(input)
   if (!parsed.success) {
@@ -44,6 +53,12 @@ export async function createTask(input: CreateTaskInput) {
       assignees: { create: [...new Set(assigneeIds)].map((userId) => ({ userId })) },
     },
   })
+
+  await notifyUsers(
+    assigneeIds.filter((userId) => userId !== session.user.id),
+    `${session.user.name} assigned you the task “${task.title}”.`,
+    { type: 'Task', id: task.id }
+  )
 
   revalidatePath('/dashboard/tasks')
   revalidatePath(`/dashboard/projects/${parsed.data.projectId}`)
@@ -91,7 +106,11 @@ export async function updateTaskStatus(input: UpdateTaskStatusInput) {
 
   const before = await db.task.findUnique({
     where: { id: parsed.data.id },
-    select: { status: true, project: { select: { id: true, title: true } } },
+    select: {
+      status: true,
+      project: { select: { id: true, title: true } },
+      assignees: { select: { userId: true } },
+    },
   })
 
   try {
@@ -109,6 +128,12 @@ export async function updateTaskStatus(input: UpdateTaskStatusInput) {
         projectId: before.project.id,
         projectTitle: before.project.title,
       })
+
+      await notifyUsers(
+        before.assignees.map((a) => a.userId).filter((userId) => userId !== session.user.id),
+        `${session.user.name} moved “${task.title}” to ${STAGE_LABEL[task.status] ?? task.status}.`,
+        { type: 'Task', id: task.id }
+      )
     }
 
     revalidatePath('/dashboard/tasks')
@@ -130,7 +155,7 @@ export async function updateTaskStatus(input: UpdateTaskStatusInput) {
  * call adds, removes and clears.
  */
 export async function setTaskAssignees(input: SetTaskAssigneesInput) {
-  await requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE'])
+  const session = await requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE'])
 
   const parsed = setTaskAssigneesSchema.safeParse(input)
   if (!parsed.success) {
@@ -140,13 +165,19 @@ export async function setTaskAssignees(input: SetTaskAssigneesInput) {
   const { id, assigneeIds } = parsed.data
   const keep = [...new Set(assigneeIds)]
 
-  const task = await db.task.findUnique({ where: { id }, select: { id: true } })
+  const task = await db.task.findUnique({
+    where: { id },
+    select: { id: true, title: true, assignees: { select: { userId: true } } },
+  })
   if (!task) {
     return {
       success: false as const,
       error: 'That task no longer exists — refresh to see the current board.',
     }
   }
+
+  const before = task.assignees.map((a) => a.userId)
+  const added = keep.filter((userId) => !before.includes(userId) && userId !== session.user.id)
 
   await db.$transaction([
     // notIn [] matches nothing in MySQL, so guard the empty case.
@@ -158,6 +189,11 @@ export async function setTaskAssignees(input: SetTaskAssigneesInput) {
       skipDuplicates: true,
     }),
   ])
+
+  await notifyUsers(added, `${session.user.name} assigned you the task “${task.title}”.`, {
+    type: 'Task',
+    id: task.id,
+  })
 
   revalidatePath('/dashboard/tasks')
   return { success: true as const }
