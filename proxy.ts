@@ -11,11 +11,17 @@ const EMPLOYEE_BLOCKED_PREFIXES = [
   '/dashboard/team',
   '/dashboard/activity',
   '/dashboard/recycle-bin',
+  '/dashboard/finance',
   '/dashboard/quotations',
   // The quotation PDF lives outside /dashboard, so block it by name too.
   '/print/quotations',
 ]
-const ADMIN_BLOCKED_PREFIXES = ['/dashboard/team', '/dashboard/activity', '/dashboard/recycle-bin']
+const ADMIN_BLOCKED_PREFIXES = [
+  '/dashboard/team',
+  '/dashboard/activity',
+  '/dashboard/recycle-bin',
+  '/dashboard/finance',
+]
 
 export default auth((req) => {
   const { nextUrl } = req

@@ -63,6 +63,34 @@ enum ApprovalStatus {
   CHANGES_REQUESTED
 }
 
+/// Finance: the studio's three real money accounts.
+enum FinanceAccountType {
+  CASH
+  SAVING
+  CURRENT
+}
+
+/// What a ledger row means. TRANSFER moves money between our own accounts,
+/// OWNER_* is the owner's capital — neither is business income or expense.
+enum FinanceTxType {
+  MONEY_IN
+  MONEY_OUT
+  TRANSFER
+  OWNER_INVESTMENT
+  OWNER_WITHDRAWAL
+}
+
+/// Financial rows are never deleted — a mistake is VOID and stays readable.
+enum FinanceTxStatus {
+  ACTIVE
+  VOID
+}
+
+enum FinanceCategoryKind {
+  INCOME
+  EXPENSE
+}
+
 enum ReminderStatus {
   UPCOMING
   DUE_TODAY
@@ -80,7 +108,7 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  leadsAssigned      Lead[]            @relation("LeadAssignee")
+  leadsAssigned      Lead[]                  @relation("LeadAssignee")
   clientsCreated     Client[]
   quotationsCreated  Quotation[]
   projectsCreated    Project[]
@@ -92,9 +120,12 @@ model User {
   notifications      Notification[]
   servicesCreated    Service[]
   todos              Todo[]
-  clientsDeleted     Client[]          @relation("ClientDeletedBy")
-  tasksDeleted       Task[]            @relation("TaskDeletedBy")
-  todosDeleted       Todo[]            @relation("TodoDeletedBy")
+  financeCreated     FinanceTransaction[]    @relation("FinanceTxCreatedBy")
+  financeVoided      FinanceTransaction[]    @relation("FinanceTxVoidedBy")
+  reconciliations    FinanceReconciliation[]
+  clientsDeleted     Client[]                @relation("ClientDeletedBy")
+  tasksDeleted       Task[]                  @relation("TaskDeletedBy")
+  todosDeleted       Todo[]                  @relation("TodoDeletedBy")
 }
 
 model Client {
@@ -115,9 +146,10 @@ model Client {
   deletedBy   User?     @relation("ClientDeletedBy", fields: [deletedById], references: [id])
   deletedById String?
 
-  leads      Lead[]
-  quotations Quotation[]
-  projects   Project[]
+  leads               Lead[]
+  quotations          Quotation[]
+  projects            Project[]
+  financeTransactions FinanceTransaction[]
 
   @@index([deletedAt])
 }
@@ -208,11 +240,12 @@ model Project {
   deadline     DateTime?
   createdAt    DateTime      @default(now())
 
-  assignees ProjectAssignee[]
-  tasks     Task[]
-  files     ProjectFile[]
-  approvals ClientApproval[]
-  revisions Revision[]
+  financeTransactions FinanceTransaction[]
+  assignees           ProjectAssignee[]
+  tasks               Task[]
+  files               ProjectFile[]
+  approvals           ClientApproval[]
+  revisions           Revision[]
 }
 
 model ProjectAssignee {
@@ -313,6 +346,104 @@ model Reminder {
   assignedTo        User           @relation(fields: [assignedToId], references: [id])
   assignedToId      String
   createdAt         DateTime       @default(now())
+}
+
+/// One of the three money accounts. The balance is never stored — it is the
+/// opening balance plus every ACTIVE ledger row, worked out at query time.
+model FinanceAccount {
+  id             String             @id @default(cuid())
+  type           FinanceAccountType @unique
+  name           String
+  openingBalance Decimal            @default(0) @db.Decimal(14, 2)
+  openingDate    DateTime           @default(now())
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  transactions    FinanceTransaction[]    @relation("TxAccount")
+  transfersIn     FinanceTransaction[]    @relation("TxToAccount")
+  reconciliations FinanceReconciliation[]
+}
+
+/// Income and expense headings. Seeded with the studio's list; a Super Admin
+/// can add their own.
+model FinanceCategory {
+  id        String              @id @default(cuid())
+  kind      FinanceCategoryKind
+  name      String
+  isActive  Boolean             @default(true)
+  createdAt DateTime            @default(now())
+
+  transactions FinanceTransaction[]
+
+  @@unique([kind, name])
+}
+
+/// The ledger. Every rupee in or out of any account is one row here.
+///
+/// MONEY_IN / OWNER_INVESTMENT credit `account`.
+/// MONEY_OUT / OWNER_WITHDRAWAL debit `account`.
+/// TRANSFER debits `account` and credits `toAccount` — the total across all
+/// accounts is unchanged, and it never reaches Profit & Loss.
+model FinanceTransaction {
+  id     String          @id @default(cuid())
+  type   FinanceTxType
+  status FinanceTxStatus @default(ACTIVE)
+  date   DateTime
+  amount Decimal         @db.Decimal(14, 2)
+
+  account     FinanceAccount  @relation("TxAccount", fields: [accountId], references: [id])
+  accountId   String
+  /// Transfers only: where the money lands.
+  toAccount   FinanceAccount? @relation("TxToAccount", fields: [toAccountId], references: [id])
+  toAccountId String?
+
+  category   FinanceCategory? @relation(fields: [categoryId], references: [id])
+  categoryId String?
+  client     Client?          @relation(fields: [clientId], references: [id])
+  clientId   String?
+  project    Project?         @relation(fields: [projectId], references: [id])
+  projectId  String?
+
+  /// Who paid us, or who we paid.
+  counterparty  String?
+  paymentMethod String?
+  reference     String?
+  description   String
+  notes         String? @db.Text
+  /// Payment proof or bill, on Cloudinary.
+  attachmentUrl String?
+
+  reconciledAt DateTime?
+
+  createdBy   User      @relation("FinanceTxCreatedBy", fields: [createdById], references: [id])
+  createdById String
+  voidedBy    User?     @relation("FinanceTxVoidedBy", fields: [voidedById], references: [id])
+  voidedById  String?
+  voidedAt    DateTime?
+  voidReason  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([date])
+  @@index([accountId, status, date])
+  @@index([clientId])
+  @@index([projectId])
+}
+
+/// "What the bank says" against "what the ledger says", on a given date.
+model FinanceReconciliation {
+  id            String         @id @default(cuid())
+  account       FinanceAccount @relation(fields: [accountId], references: [id])
+  accountId     String
+  statementDate DateTime
+  actualBalance Decimal        @db.Decimal(14, 2)
+  erpBalance    Decimal        @db.Decimal(14, 2)
+  notes         String?        @db.Text
+  createdBy     User           @relation(fields: [createdById], references: [id])
+  createdById   String
+  createdAt     DateTime       @default(now())
+
+  @@index([accountId, statementDate])
 }
 
 model ActivityLog {

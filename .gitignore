@@ -44,3 +44,4 @@ yarn-error.log*
 
 # database dumps (contain password hashes)
 whitespace-erp-import.sql
+pending-migrations.sql

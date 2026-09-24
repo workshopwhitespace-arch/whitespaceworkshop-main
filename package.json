@@ -5,8 +5,9 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:plain": "next dev",
-    "build": "next build",
+    "build": "prisma migrate deploy && next build",
     "build:deploy": "prisma migrate deploy && next build",
+    "build:app": "next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
