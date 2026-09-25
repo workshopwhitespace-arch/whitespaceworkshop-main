@@ -2,7 +2,6 @@
 
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
-import { employeeProjectScope } from '@/lib/scope'
 
 /**
  * Everything the dashboard widgets need, in one round trip.
@@ -19,7 +18,8 @@ export async function getDashboardData() {
   const userId = session.user.id
   const isEmployee = session.user.role === 'EMPLOYEE'
 
-  const projectScope = isEmployee ? employeeProjectScope(userId) : {}
+  // Projects are shared with everyone; only tasks stay personal.
+  const projectScope = {}
   // Deleted tasks sit in the recycle bin and count for nothing.
   const taskScope = isEmployee
     ? { deletedAt: null, assignees: { some: { userId } } }

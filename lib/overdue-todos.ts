@@ -13,7 +13,7 @@ import { notifyUsers } from '@/lib/notify'
 const HOUR = 60 * 60 * 1000
 
 /** Reminders go out at this hour (IST) on the day a todo is due. */
-const REMINDER_HOUR = 19
+const REMINDER_HOUR = 18
 
 // The studio works in IST. Server-side dates must be formatted in that zone
 // explicitly — on Vercel the server clock is UTC and would show the wrong day.
@@ -30,7 +30,7 @@ function formatDeadline(date: Date) {
 
 export async function notifyOverdueTodos() {
   // A deadline is stored as midnight (IST) at the start of its day, so
-  // 19:00 on the due day is deadline + 19h. Anything at or past that is due
+  // 18:00 on the due day is deadline + 19h. Anything at or past that is due
   // a reminder — including older todos a missed run never got to.
   const cutoff = new Date(Date.now() - REMINDER_HOUR * HOUR)
 

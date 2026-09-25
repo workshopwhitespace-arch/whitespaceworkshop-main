@@ -4,7 +4,7 @@ import { notifyOverdueTodos } from '@/lib/overdue-todos'
 export const dynamic = 'force-dynamic'
 
 /**
- * Daily todo reminder, called by Vercel Cron at 13:30 UTC = 19:00 IST (see
+ * Daily todo reminder, called by Vercel Cron at 13:30 UTC = 18:00 IST (see
  * vercel.json). Vercel
  * sends `Authorization: Bearer <CRON_SECRET>`; anything else is refused, and
  * with no CRON_SECRET configured the route stays shut entirely.

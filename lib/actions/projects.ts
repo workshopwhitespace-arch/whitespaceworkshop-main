@@ -3,7 +3,6 @@
 import { revalidatePath } from 'next/cache'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
-import { employeeProjectScope } from '@/lib/scope'
 import { seedTasksForProject } from '@/lib/actions/tasks'
 import { logActivity } from '@/lib/actions/activity'
 import {
@@ -110,13 +109,13 @@ export async function listProjects(filters?: {
   status?: 'BRIEF' | 'CONCEPT' | 'DRAFT' | 'REVISION' | 'FINAL' | 'DELIVERED'
 }) {
   const session = await requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE'])
-  const isEmployee = session.user.role === 'EMPLOYEE'
 
+  // The project book is shared: a project one person sets up has to be
+  // visible to everyone. Only its value is restricted (Super Admin).
   const projects = await db.project.findMany({
     where: {
       ...(filters?.type ? { type: filters.type } : {}),
       ...(filters?.status ? { status: filters.status } : {}),
-      ...(isEmployee ? employeeProjectScope(session.user.id) : {}),
     },
     include: {
       client: { select: { id: true, name: true } },
@@ -145,7 +144,6 @@ export async function listProjects(filters?: {
  */
 export async function getProjectDetail(projectId: string) {
   const session = await requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE'])
-  const isEmployee = session.user.role === 'EMPLOYEE'
 
   const project = await db.project.findUnique({
     where: { id: projectId },
@@ -169,15 +167,6 @@ export async function getProjectDetail(projectId: string) {
   })
 
   if (!project) return null
-
-  // Assigned to the project, or holding a task on it — either is enough.
-  if (isEmployee) {
-    const onProject = project.assignees.some((a) => a.userId === session.user.id)
-    const hasTask = project.tasks.some((t) =>
-      t.assignees.some((a) => a.userId === session.user.id)
-    )
-    if (!onProject && !hasTask) return null
-  }
 
   // Project money is Super Admin only.
   if (session.user.role === 'SUPER_ADMIN') return project

@@ -3,7 +3,6 @@
 import { revalidatePath } from 'next/cache'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
-import { employeeClientScope, employeeProjectScope } from '@/lib/scope'
 import {
   createClientSchema,
   updateClientSchema,
@@ -110,20 +109,14 @@ export async function listClients() {
  */
 export async function getClientDetail(clientId: string) {
   const session = await requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE'])
-  const isEmployee = session.user.role === 'EMPLOYEE'
 
   const canSeeMoney = session.user.role === 'SUPER_ADMIN'
 
   const client = await db.client.findFirst({ where: { id: clientId, deletedAt: null } })
   if (!client) return null
 
-  // The client itself is shared; the projects listed under it are still
-  // only the ones a Team member is on.
   const projects = await db.project.findMany({
-    where: {
-      clientId,
-      ...(isEmployee ? employeeProjectScope(session.user.id) : {}),
-    },
+    where: { clientId },
     orderBy: { createdAt: 'desc' },
   })
 
